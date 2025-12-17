@@ -186,7 +186,7 @@ class TokenManager:
                 print(f"🌐 使用代理: {proxy_url}")
 
             response = await session.get(
-                "https://sora.chatgpt.com/backend/project_y/invite/mine",
+                "https://sora.chatgpt.com/backend/project_y/v2/me",
                 **kwargs
             )
 
@@ -195,11 +195,32 @@ class TokenManager:
             if response.status_code == 200:
                 data = response.json()
                 print(f"✅ Sora2邀请码获取成功: {data}")
+
+                # Extract data from my_info object
+                my_info = data.get("my_info", {})
+                invite_code = my_info.get("invite_code")
+                invites_remaining = my_info.get("invites_remaining", 0)
+                num_redemption_gens = my_info.get("num_redemption_gens", 0)
+
+                # Note: The new API structure has changed
+                # - invite_code: The invite code string
+                # - invites_remaining: Number of invites left to send (e.g., 10)
+                # - num_redemption_gens: Number of video generations available (剩余可生成视频次数)
+                #
+                # Mapping to old structure:
+                # - total_count: Using invites_remaining (remaining invite quota)
+                # - redeemed_count: Calculated as (total_quota - invites_remaining)
+                #   Assuming total quota is 10, but this may vary
+                # - remaining_count: Using num_redemption_gens (remaining video generation count)
+                total_invite_quota = 10  # Default total invite quota
+                redeemed_count = total_invite_quota - invites_remaining
+
                 return {
                     "supported": True,
-                    "invite_code": data.get("invite_code"),
-                    "redeemed_count": data.get("redeemed_count", 0),
-                    "total_count": data.get("total_count", 0)
+                    "invite_code": invite_code,
+                    "redeemed_count": redeemed_count,
+                    "total_count": invites_remaining,
+                    "remaining_count": num_redemption_gens  # 剩余视频生成次数
                 }
             else:
                 print(f"❌ 获取Sora2邀请码失败: {response.status_code}")
@@ -237,12 +258,29 @@ class TokenManager:
 
                                 if retry_response.status_code == 200:
                                     retry_data = retry_response.json()
-                                    print(f"✅ Sora2激活成功！邀请码: {retry_data}")
+                                    print(f"✅ Sora2激活成功!邀请码: {retry_data}")
+
+                                    # Extract data from my_info object if available (new structure)
+                                    my_info = retry_data.get("my_info", {})
+                                    if my_info:
+                                        invite_code = my_info.get("invite_code")
+                                        invites_remaining = my_info.get("invites_remaining", 0)
+                                        num_redemption_gens = my_info.get("num_redemption_gens", 0)
+                                        total_invites = 10
+                                        redeemed_count = total_invites - invites_remaining
+                                    else:
+                                        # Fallback to old structure if my_info not present
+                                        invite_code = retry_data.get("invite_code")
+                                        redeemed_count = retry_data.get("redeemed_count", 0)
+                                        invites_remaining = retry_data.get("total_count", 0)
+                                        num_redemption_gens = 0
+
                                     return {
                                         "supported": True,
-                                        "invite_code": retry_data.get("invite_code"),
-                                        "redeemed_count": retry_data.get("redeemed_count", 0),
-                                        "total_count": retry_data.get("total_count", 0)
+                                        "invite_code": invite_code,
+                                        "redeemed_count": redeemed_count,
+                                        "total_count": invites_remaining,
+                                        "remaining_count": num_redemption_gens
                                     }
                                 else:
                                     print(f"⚠️  激活后仍无法获取邀请码: {retry_response.status_code}")
@@ -718,7 +756,7 @@ class TokenManager:
             # If API call fails, subscription info will be None
             print(f"Failed to get subscription info: {e}")
 
-        # Get Sora2 invite code
+        # Get Sora2 invite code and remaining count
         sora2_supported = None
         sora2_invite_code = None
         sora2_redeemed_count = 0
@@ -730,16 +768,10 @@ class TokenManager:
             sora2_invite_code = sora2_info.get("invite_code")
             sora2_redeemed_count = sora2_info.get("redeemed_count", 0)
             sora2_total_count = sora2_info.get("total_count", 0)
+            sora2_remaining_count = sora2_info.get("remaining_count", 0)  # 直接从接口获取剩余次数
 
-            # If Sora2 is supported, get remaining count
             if sora2_supported:
-                try:
-                    remaining_info = await self.get_sora2_remaining_count(token_value)
-                    if remaining_info.get("success"):
-                        sora2_remaining_count = remaining_info.get("remaining_count", 0)
-                        print(f"✅ Sora2剩余次数: {sora2_remaining_count}")
-                except Exception as e:
-                    print(f"Failed to get Sora2 remaining count: {e}")
+                print(f"✅ Sora2剩余次数: {sora2_remaining_count}")
         except Exception as e:
             error_msg = str(e)
             # Re-raise if it's a critical error (unsupported country)
@@ -935,16 +967,7 @@ class TokenManager:
             sora2_invite_code = sora2_info.get("invite_code")
             sora2_redeemed_count = sora2_info.get("redeemed_count", 0)
             sora2_total_count = sora2_info.get("total_count", 0)
-            sora2_remaining_count = 0
-
-            # If Sora2 is supported, get remaining count
-            if sora2_supported:
-                try:
-                    remaining_info = await self.get_sora2_remaining_count(token_data.token)
-                    if remaining_info.get("success"):
-                        sora2_remaining_count = remaining_info.get("remaining_count", 0)
-                except Exception as e:
-                    print(f"Failed to get Sora2 remaining count: {e}")
+            sora2_remaining_count = sora2_info.get("remaining_count", 0)  # 直接从接口获取剩余次数
 
             # Update token Sora2 info in database
             await self.db.update_token_sora2(
@@ -997,26 +1020,26 @@ class TokenManager:
         """Record successful request (reset error count)"""
         await self.db.reset_error_count(token_id)
 
-        # Update Sora2 remaining count after video generation
+        # Decrement Sora2 remaining count after video generation (local calculation)
         if is_video:
             try:
                 token_data = await self.db.get_token(token_id)
                 if token_data and token_data.sora2_supported:
-                    remaining_info = await self.get_sora2_remaining_count(token_data.token)
-                    if remaining_info.get("success"):
-                        remaining_count = remaining_info.get("remaining_count", 0)
-                        await self.db.update_token_sora2_remaining(token_id, remaining_count)
-                        print(f"✅ 更新Token {token_id} 的Sora2剩余次数: {remaining_count}")
+                    # 本地扣减剩余次数
+                    current_remaining = token_data.sora2_remaining_count
+                    new_remaining = max(0, current_remaining - 1)  # 确保不会小于0
 
-                        # If remaining count is 0, set cooldown
-                        if remaining_count == 0:
-                            reset_seconds = remaining_info.get("access_resets_in_seconds", 0)
-                            if reset_seconds > 0:
-                                cooldown_until = datetime.now() + timedelta(seconds=reset_seconds)
-                                await self.db.update_token_sora2_cooldown(token_id, cooldown_until)
-                                print(f"⏱️ Token {token_id} 剩余次数为0，设置冷却时间至: {cooldown_until}")
+                    await self.db.update_token_sora2_remaining(token_id, new_remaining)
+                    print(f"✅ 扣减Token {token_id} 的Sora2剩余次数: {current_remaining} -> {new_remaining}")
+
+                    # 如果剩余次数为0，设置冷却时间（24小时后重置）
+                    if new_remaining == 0:
+                        # 设置24小时后的冷却时间
+                        cooldown_until = datetime.now() + timedelta(hours=24)
+                        await self.db.update_token_sora2_cooldown(token_id, cooldown_until)
+                        print(f"⏱️ Token {token_id} 剩余次数为0，设置冷却时间至: {cooldown_until}")
             except Exception as e:
-                print(f"Failed to update Sora2 remaining count: {e}")
+                print(f"Failed to decrement Sora2 remaining count: {e}")
     
     async def refresh_sora2_remaining_if_cooldown_expired(self, token_id: int):
         """Refresh Sora2 remaining count if cooldown has expired"""
