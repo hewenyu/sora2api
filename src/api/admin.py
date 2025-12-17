@@ -647,17 +647,8 @@ async def activate_sora2(
         result = await token_manager.activate_sora2_invite(token_obj.token, invite_code)
 
         if result.get("success"):
-            # Get new invite code after activation
+            # Get Sora2 info after activation (包含邀请码和剩余次数)
             sora2_info = await token_manager.get_sora2_invite_code(token_obj.token)
-
-            # Get remaining count
-            sora2_remaining_count = 0
-            try:
-                remaining_info = await token_manager.get_sora2_remaining_count(token_obj.token)
-                if remaining_info.get("success"):
-                    sora2_remaining_count = remaining_info.get("remaining_count", 0)
-            except Exception as e:
-                print(f"Failed to get Sora2 remaining count: {e}")
 
             # Update database
             await db.update_token_sora2(
@@ -666,7 +657,7 @@ async def activate_sora2(
                 invite_code=sora2_info.get("invite_code"),
                 redeemed_count=sora2_info.get("redeemed_count", 0),
                 total_count=sora2_info.get("total_count", 0),
-                remaining_count=sora2_remaining_count
+                remaining_count=sora2_info.get("remaining_count", 0)
             )
 
             return {
@@ -676,7 +667,7 @@ async def activate_sora2(
                 "invite_code": sora2_info.get("invite_code"),
                 "redeemed_count": sora2_info.get("redeemed_count", 0),
                 "total_count": sora2_info.get("total_count", 0),
-                "sora2_remaining_count": sora2_remaining_count
+                "sora2_remaining_count": sora2_info.get("remaining_count", 0)
             }
         else:
             return {

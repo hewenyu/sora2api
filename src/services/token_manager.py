@@ -236,59 +236,9 @@ class TokenManager:
                         country = error_info.get("param", "未知")
                         raise Exception(f"Sora在您的国家/地区不可用 ({country}): {error_info.get('message', '')}")
 
-                    # Check if it's 401 unauthorized (token doesn't support Sora2)
-                    if response.status_code == 401 and "Unauthorized" in error_info.get("message", ""):
-                        print(f"⚠️  Token不支持Sora2，尝试激活...")
-
-                        # Try to activate Sora2
-                        try:
-                            activate_response = await session.get(
-                                "https://sora.chatgpt.com/backend/m/bootstrap",
-                                **kwargs
-                            )
-
-                            if activate_response.status_code == 200:
-                                print(f"✅ Sora2激活请求成功，重新获取邀请码...")
-
-                                # Retry getting invite code
-                                retry_response = await session.get(
-                                    "https://sora.chatgpt.com/backend/project_y/invite/mine",
-                                    **kwargs
-                                )
-
-                                if retry_response.status_code == 200:
-                                    retry_data = retry_response.json()
-                                    print(f"✅ Sora2激活成功!邀请码: {retry_data}")
-
-                                    # Extract data from my_info object if available (new structure)
-                                    my_info = retry_data.get("my_info", {})
-                                    if my_info:
-                                        invite_code = my_info.get("invite_code")
-                                        invites_remaining = my_info.get("invites_remaining", 0)
-                                        num_redemption_gens = my_info.get("num_redemption_gens", 0)
-                                        total_invites = 10
-                                        redeemed_count = total_invites - invites_remaining
-                                    else:
-                                        # Fallback to old structure if my_info not present
-                                        invite_code = retry_data.get("invite_code")
-                                        redeemed_count = retry_data.get("redeemed_count", 0)
-                                        invites_remaining = retry_data.get("total_count", 0)
-                                        num_redemption_gens = 0
-
-                                    return {
-                                        "supported": True,
-                                        "invite_code": invite_code,
-                                        "redeemed_count": redeemed_count,
-                                        "total_count": invites_remaining,
-                                        "remaining_count": num_redemption_gens
-                                    }
-                                else:
-                                    print(f"⚠️  激活后仍无法获取邀请码: {retry_response.status_code}")
-                            else:
-                                print(f"⚠️  Sora2激活失败: {activate_response.status_code}")
-                        except Exception as activate_e:
-                            print(f"⚠️  Sora2激活过程出错: {activate_e}")
-
+                    # 401 表示账户不支持 Sora2（新账户默认已有权限，不需要激活）
+                    if response.status_code == 401:
+                        print(f"⚠️  Token不支持Sora2")
                         return {
                             "supported": False,
                             "invite_code": None
@@ -296,6 +246,7 @@ class TokenManager:
                 except ValueError:
                     pass
 
+                # 其他错误也返回不支持
                 return {
                     "supported": False,
                     "invite_code": None

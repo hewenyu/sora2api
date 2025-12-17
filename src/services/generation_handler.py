@@ -344,7 +344,7 @@ class GenerationHandler:
                     # Storyboard mode
                     if stream:
                         yield self._format_stream_chunk(
-                            reasoning_content="Detected storyboard format. Converting to storyboard API format...\n"
+                            reasoning_content="Detected storyboard format. Converting to  API format...\n"
                         )
 
                     formatted_prompt = self.sora_client.format_storyboard_prompt(prompt)
