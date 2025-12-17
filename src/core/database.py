@@ -187,6 +187,7 @@ class Database:
             if await self._table_exists(db, "tokens"):
                 columns_to_add = [
                     ("sora2_supported", "BOOLEAN"),
+                    # 邀请码相关字段已废弃,但保留以兼容旧数据
                     ("sora2_invite_code", "TEXT"),
                     ("sora2_redeemed_count", "INTEGER DEFAULT 0"),
                     ("sora2_total_count", "INTEGER DEFAULT 0"),
@@ -459,15 +460,15 @@ class Database:
         async with aiosqlite.connect(self.db_path) as db:
             cursor = await db.execute("""
                 INSERT INTO tokens (token, email, username, name, st, rt, client_id, remark, expiry_time, is_active,
-                                   plan_type, plan_title, subscription_end, sora2_supported, sora2_invite_code,
-                                   sora2_redeemed_count, sora2_total_count, sora2_remaining_count, sora2_cooldown_until,
+                                   plan_type, plan_title, subscription_end, sora2_supported,
+                                   sora2_total_count, sora2_remaining_count, sora2_cooldown_until,
                                    image_enabled, video_enabled, image_concurrency, video_concurrency)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (token.token, token.email, "", token.name, token.st, token.rt, token.client_id,
                   token.remark, token.expiry_time, token.is_active,
                   token.plan_type, token.plan_title, token.subscription_end,
-                  token.sora2_supported, token.sora2_invite_code,
-                  token.sora2_redeemed_count, token.sora2_total_count,
+                  token.sora2_supported,
+                  token.sora2_total_count,
                   token.sora2_remaining_count, token.sora2_cooldown_until,
                   token.image_enabled, token.video_enabled,
                   token.image_concurrency, token.video_concurrency))
@@ -552,15 +553,15 @@ class Database:
             """, (is_active, token_id))
             await db.commit()
     
-    async def update_token_sora2(self, token_id: int, supported: bool, invite_code: Optional[str] = None,
-                                redeemed_count: int = 0, total_count: int = 0, remaining_count: int = 0):
-        """Update token Sora2 support info"""
+    async def update_token_sora2(self, token_id: int, supported: bool,
+                                total_count: int = 0, remaining_count: int = 0):
+        """Update token Sora2 support info (邀请码功能已废弃)"""
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("""
                 UPDATE tokens
-                SET sora2_supported = ?, sora2_invite_code = ?, sora2_redeemed_count = ?, sora2_total_count = ?, sora2_remaining_count = ?
+                SET sora2_supported = ?, sora2_total_count = ?, sora2_remaining_count = ?
                 WHERE id = ?
-            """, (supported, invite_code, redeemed_count, total_count, remaining_count, token_id))
+            """, (supported, total_count, remaining_count, token_id))
             await db.commit()
 
     async def update_token_sora2_remaining(self, token_id: int, remaining_count: int):

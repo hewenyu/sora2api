@@ -23,10 +23,8 @@ class Token(BaseModel):
     plan_type: Optional[str] = None  # 账户类型，如 chatgpt_team
     plan_title: Optional[str] = None  # 套餐名称，如 ChatGPT Business
     subscription_end: Optional[datetime] = None  # 套餐到期时间
-    # Sora2 支持信息
+    # Sora2 支持信息 (邀请码功能已废弃)
     sora2_supported: Optional[bool] = None  # 是否支持Sora2
-    sora2_invite_code: Optional[str] = None  # Sora2邀请码
-    sora2_redeemed_count: int = 0  # Sora2已用次数
     sora2_total_count: int = 0  # Sora2总次数
     # Sora2 剩余次数
     sora2_remaining_count: int = 0  # Sora2剩余可用次数

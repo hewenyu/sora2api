@@ -190,8 +190,6 @@ async def get_tokens(token: str = Depends(verify_admin_token)) -> List[dict]:
             "subscription_end": token.subscription_end.isoformat() if token.subscription_end else None,
             # Sora2信息
             "sora2_supported": token.sora2_supported,
-            "sora2_invite_code": token.sora2_invite_code,
-            "sora2_redeemed_count": token.sora2_redeemed_count,
             "sora2_total_count": token.sora2_total_count,
             "sora2_remaining_count": token.sora2_remaining_count,
             "sora2_cooldown_until": token.sora2_cooldown_until.isoformat() if token.sora2_cooldown_until else None,
@@ -318,8 +316,6 @@ async def test_token(token_id: int, token: str = Depends(verify_admin_token)):
         if result.get("valid"):
             response.update({
                 "sora2_supported": result.get("sora2_supported"),
-                "sora2_invite_code": result.get("sora2_invite_code"),
-                "sora2_redeemed_count": result.get("sora2_redeemed_count"),
                 "sora2_total_count": result.get("sora2_total_count"),
                 "sora2_remaining_count": result.get("sora2_remaining_count")
             })
@@ -629,55 +625,7 @@ async def get_stats(token: str = Depends(verify_admin_token)):
         "today_errors": today_errors
     }
 
-# Sora2 endpoints
-@router.post("/api/tokens/{token_id}/sora2/activate")
-async def activate_sora2(
-    token_id: int,
-    invite_code: str,
-    token: str = Depends(verify_admin_token)
-):
-    """Activate Sora2 with invite code"""
-    try:
-        # Get token
-        token_obj = await db.get_token(token_id)
-        if not token_obj:
-            raise HTTPException(status_code=404, detail="Token not found")
-
-        # Activate Sora2
-        result = await token_manager.activate_sora2_invite(token_obj.token, invite_code)
-
-        if result.get("success"):
-            # Get Sora2 info after activation (包含邀请码和剩余次数)
-            sora2_info = await token_manager.get_sora2_invite_code(token_obj.token)
-
-            # Update database
-            await db.update_token_sora2(
-                token_id,
-                supported=True,
-                invite_code=sora2_info.get("invite_code"),
-                redeemed_count=sora2_info.get("redeemed_count", 0),
-                total_count=sora2_info.get("total_count", 0),
-                remaining_count=sora2_info.get("remaining_count", 0)
-            )
-
-            return {
-                "success": True,
-                "message": "Sora2 activated successfully",
-                "already_accepted": result.get("already_accepted", False),
-                "invite_code": sora2_info.get("invite_code"),
-                "redeemed_count": sora2_info.get("redeemed_count", 0),
-                "total_count": sora2_info.get("total_count", 0),
-                "sora2_remaining_count": sora2_info.get("remaining_count", 0)
-            }
-        else:
-            return {
-                "success": False,
-                "message": "Failed to activate Sora2"
-            }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to activate Sora2: {str(e)}")
+# Sora2 endpoints - 邀请码功能已废弃,不再需要激活接口
 
 # Logs endpoints
 @router.get("/api/logs")

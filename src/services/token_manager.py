@@ -163,95 +163,6 @@ class TokenManager:
 
                 raise Exception(f"Failed to get subscription info: {response.status_code}")
 
-    async def get_sora2_invite_code(self, access_token: str) -> dict:
-        """Get Sora2 invite code"""
-        proxy_url = await self.proxy_manager.get_proxy_url()
-
-        print(f"🔍 开始获取Sora2邀请码...")
-
-        async with AsyncSession() as session:
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Accept": "application/json"
-            }
-
-            kwargs = {
-                "headers": headers,
-                "timeout": 30,
-                "impersonate": "chrome"  # 自动生成 User-Agent 和浏览器指纹
-            }
-
-            if proxy_url:
-                kwargs["proxy"] = proxy_url
-                print(f"🌐 使用代理: {proxy_url}")
-
-            response = await session.get(
-                "https://sora.chatgpt.com/backend/project_y/v2/me",
-                **kwargs
-            )
-
-            print(f"📥 响应状态码: {response.status_code}")
-
-            if response.status_code == 200:
-                data = response.json()
-                print(f"✅ Sora2邀请码获取成功: {data}")
-
-                # Extract data from my_info object
-                my_info = data.get("my_info", {})
-                invite_code = my_info.get("invite_code")
-                invites_remaining = my_info.get("invites_remaining", 0)
-                num_redemption_gens = my_info.get("num_redemption_gens", 0)
-
-                # Note: The new API structure has changed
-                # - invite_code: The invite code string
-                # - invites_remaining: Number of invites left to send (e.g., 10)
-                # - num_redemption_gens: Number of video generations available (剩余可生成视频次数)
-                #
-                # Mapping to old structure:
-                # - total_count: Using invites_remaining (remaining invite quota)
-                # - redeemed_count: Calculated as (total_quota - invites_remaining)
-                #   Assuming total quota is 10, but this may vary
-                # - remaining_count: Using num_redemption_gens (remaining video generation count)
-                total_invite_quota = 10  # Default total invite quota
-                redeemed_count = total_invite_quota - invites_remaining
-
-                return {
-                    "supported": True,
-                    "invite_code": invite_code,
-                    "redeemed_count": redeemed_count,
-                    "total_count": invites_remaining,
-                    "remaining_count": num_redemption_gens  # 剩余视频生成次数
-                }
-            else:
-                print(f"❌ 获取Sora2邀请码失败: {response.status_code}")
-                print(f"📄 响应内容: {response.text}")
-
-                # Check for specific errors
-                try:
-                    error_data = response.json()
-                    error_info = error_data.get("error", {})
-
-                    # Check for unsupported_country_code
-                    if error_info.get("code") == "unsupported_country_code":
-                        country = error_info.get("param", "未知")
-                        raise Exception(f"Sora在您的国家/地区不可用 ({country}): {error_info.get('message', '')}")
-
-                    # 401 表示账户不支持 Sora2（新账户默认已有权限，不需要激活）
-                    if response.status_code == 401:
-                        print(f"⚠️  Token不支持Sora2")
-                        return {
-                            "supported": False,
-                            "invite_code": None
-                        }
-                except ValueError:
-                    pass
-
-                # 其他错误也返回不支持
-                return {
-                    "supported": False,
-                    "invite_code": None
-                }
-
     async def get_sora2_remaining_count(self, access_token: str) -> dict:
         """Get Sora2 remaining video count
 
@@ -403,57 +314,6 @@ class TokenManager:
                 print(f"❌ 用户名设置失败: {response.status_code}")
                 print(f"📄 响应内容: {response.text[:500]}")
                 raise Exception(f"Failed to set username: {response.status_code}")
-
-    async def activate_sora2_invite(self, access_token: str, invite_code: str) -> dict:
-        """Activate Sora2 with invite code"""
-        import uuid
-        proxy_url = await self.proxy_manager.get_proxy_url()
-
-        print(f"🔍 开始激活Sora2邀请码: {invite_code}")
-        print(f"🔑 Access Token 前缀: {access_token[:50]}...")
-
-        async with AsyncSession() as session:
-            # 生成设备ID
-            device_id = str(uuid.uuid4())
-
-            # 只设置必要的头，让 impersonate 处理其他
-            headers = {
-                "authorization": f"Bearer {access_token}",
-                "cookie": f"oai-did={device_id}"
-            }
-
-            print(f"🆔 设备ID: {device_id}")
-            print(f"📦 请求体: {{'invite_code': '{invite_code}'}}")
-
-            kwargs = {
-                "headers": headers,
-                "json": {"invite_code": invite_code},
-                "timeout": 30,
-                "impersonate": "chrome120"  # 使用 chrome120 让库自动处理 UA 等头
-            }
-
-            if proxy_url:
-                kwargs["proxy"] = proxy_url
-                print(f"🌐 使用代理: {proxy_url}")
-
-            response = await session.post(
-                "https://sora.chatgpt.com/backend/project_y/invite/accept",
-                **kwargs
-            )
-
-            print(f"📥 响应状态码: {response.status_code}")
-
-            if response.status_code == 200:
-                data = response.json()
-                print(f"✅ Sora2激活成功: {data}")
-                return {
-                    "success": data.get("success", False),
-                    "already_accepted": data.get("already_accepted", False)
-                }
-            else:
-                print(f"❌ Sora2激活失败: {response.status_code}")
-                print(f"📄 响应内容: {response.text[:500]}")
-                raise Exception(f"Failed to activate Sora2: {response.status_code}")
 
     async def st_to_at(self, session_token: str) -> dict:
         """Convert Session Token to Access Token"""
@@ -707,21 +567,15 @@ class TokenManager:
             # If API call fails, subscription info will be None
             print(f"Failed to get subscription info: {e}")
 
-        # Get Sora2 invite code and remaining count
+        # Get Sora2 remaining count (邀请码功能已废弃,仅获取剩余次数)
         sora2_supported = None
-        sora2_invite_code = None
-        sora2_redeemed_count = 0
         sora2_total_count = 0
         sora2_remaining_count = 0
         try:
-            sora2_info = await self.get_sora2_invite_code(token_value)
-            sora2_supported = sora2_info.get("supported", False)
-            sora2_invite_code = sora2_info.get("invite_code")
-            sora2_redeemed_count = sora2_info.get("redeemed_count", 0)
-            sora2_total_count = sora2_info.get("total_count", 0)
-            sora2_remaining_count = sora2_info.get("remaining_count", 0)  # 直接从接口获取剩余次数
-
-            if sora2_supported:
+            sora2_info = await self.get_sora2_remaining_count(token_value)
+            if sora2_info.get("success"):
+                sora2_supported = True
+                sora2_remaining_count = sora2_info.get("remaining_count", 0)
                 print(f"✅ Sora2剩余次数: {sora2_remaining_count}")
         except Exception as e:
             error_msg = str(e)
@@ -782,8 +636,6 @@ class TokenManager:
             plan_title=plan_title,
             subscription_end=subscription_end,
             sora2_supported=sora2_supported,
-            sora2_invite_code=sora2_invite_code,
-            sora2_redeemed_count=sora2_redeemed_count,
             sora2_total_count=sora2_total_count,
             sora2_remaining_count=sora2_remaining_count,
             image_enabled=image_enabled,
@@ -912,20 +764,22 @@ class TokenManager:
             # Try to get user info from Sora API
             user_info = await self.get_user_info(token_data.token)
 
-            # Refresh Sora2 invite code and counts
-            sora2_info = await self.get_sora2_invite_code(token_data.token)
-            sora2_supported = sora2_info.get("supported", False)
-            sora2_invite_code = sora2_info.get("invite_code")
-            sora2_redeemed_count = sora2_info.get("redeemed_count", 0)
-            sora2_total_count = sora2_info.get("total_count", 0)
-            sora2_remaining_count = sora2_info.get("remaining_count", 0)  # 直接从接口获取剩余次数
+            # Refresh Sora2 remaining count (邀请码功能已废弃)
+            sora2_supported = False
+            sora2_total_count = 0
+            sora2_remaining_count = 0
+            try:
+                sora2_info = await self.get_sora2_remaining_count(token_data.token)
+                if sora2_info.get("success"):
+                    sora2_supported = True
+                    sora2_remaining_count = sora2_info.get("remaining_count", 0)
+            except Exception:
+                pass
 
             # Update token Sora2 info in database
             await self.db.update_token_sora2(
                 token_id,
                 supported=sora2_supported,
-                invite_code=sora2_invite_code,
-                redeemed_count=sora2_redeemed_count,
                 total_count=sora2_total_count,
                 remaining_count=sora2_remaining_count
             )
@@ -936,8 +790,6 @@ class TokenManager:
                 "email": user_info.get("email"),
                 "username": user_info.get("username"),
                 "sora2_supported": sora2_supported,
-                "sora2_invite_code": sora2_invite_code,
-                "sora2_redeemed_count": sora2_redeemed_count,
                 "sora2_total_count": sora2_total_count,
                 "sora2_remaining_count": sora2_remaining_count
             }
